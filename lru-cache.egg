@@ -1,0 +1,10 @@
+((synopsis "Least recently used (LRU) cache")
+ (author "Christopher Harrison")
+ (license "LGPL-3.0-or-later")
+ (version "0.1.0")
+ (category data)
+ (dependencies srfi-69 matchable)
+ (test-dependencies test)
+ (components
+   (extension lru-cache
+              (types-file))))

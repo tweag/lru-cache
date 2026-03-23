@@ -1,0 +1,10 @@
+# Compiled binary
+lru-cache
+
+# Chicken build artefacts
+*.so
+*.o
+*.import.scm
+*.types
+*.build.sh
+*.install.sh

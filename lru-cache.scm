@@ -1,222 +1,226 @@
 ;; Least recently used cache library for Chicken Scheme
 ;; Copyright (C) 2026 Christopher Harrison
 ;;
-;; This program is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or (at
-;; your option) any later version.
+;; This library is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU Lesser General Public License as
+;; published by the Free Software Foundation, either version 3 of the
+;; License, or (at your option) any later version.
 ;;
-;; This program is distributed in the hope that it will be useful, but
+;; This library is distributed in the hope that it will be useful, but
 ;; WITHOUT ANY WARRANTY; without even the implied warranty of
 ;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-;; General Public License for more details.
+;; Lesser General Public License for more details.
 ;;
-;; You should have received a copy of the GNU General Public License
-;; along with this program. If not, see <https://www.gnu.org/licenses/>.
+;; You should have received a copy of the GNU Lesser General Public
+;; License along with this library. If not, see
+;; <https://www.gnu.org/licenses/>.
 
-(import (chicken format)
-        (srfi 69)
-        matchable)
+(module lru-cache
 
-;; Doubly linked list helpers
+  ;; Exports
+  (make-lru-cache
+   lru-cache-size
+   lru-cache-capacity)
 
-; Doubly linked list node type
-(define-type dll-node (pair * pair))
+  (import scheme
+          (chicken base)
+          (chicken format)
+          (srfi 69)
+          matchable)
 
-(: dll-set-previous! (dll-node * -> noreturn))
-(define (dll-set-previous! node previous-key)
-  (set-car! (cdr node) previous-key))
+  ;; Doubly linked list helpers
 
-(: dll-set-next! (dll-node * -> noreturn))
-(define (dll-set-next! node next-key)
-  (set-cdr! (cdr node) next-key))
+  ; Doubly linked list node type
+  (define-type dll-node (pair * pair))
 
-;; LRU cache implementation
+  (: dll-set-previous! (dll-node * -> noreturn))
+  (define (dll-set-previous! node previous-key)
+    (set-car! (cdr node) previous-key))
 
-; Cache types
-; TODO cache key type should be more liberal
-(define-type lru-cache-closure (symbol #!rest * -> *))
-(define-type cache-key (or symbol list))
+  (: dll-set-next! (dll-node * -> noreturn))
+  (define (dll-set-next! node next-key)
+    (set-cdr! (cdr node) next-key))
 
-(: make-lru-cache (#!optional integer -> lru-cache-closure))
-(define (make-lru-cache #!optional (max-size 64))
+  ;; LRU cache implementation
 
-  ; The cache is a hash table, that represents a doubly linked list; its
-  ; keys are arbitrary (*), with values of the form:
-  ;
-  ;   (<payload : *> . (<previous key : *> . <next key : *>)
-  ;
-  ; A sentinel symbol is used to denote the termini of the list, but we
-  ; also cache both the head and tail nodes for efficiency.
-  (let* ((terminus (cons 'sentinel '())))
-    (letrec ((head  (the cache-key terminus))
-             (tail  (the cache-key terminus))
-             (cache (the hash-table (make-hash-table #:size max-size)))
+  ; Cache types
+  ; TODO cache key type should be more liberal
+  (define-type lru-cache-closure (symbol #!rest * -> *))
+  (define-type cache-key (or symbol list))
 
-             ; Recursively build up the list of keys by traversing the
-             ; doubly linked list from a given start
-             (dll-keys (lambda (key)
-                         (if (eq? key terminus)
-                           ; Empty list if there are no entries
-                           '()
+  (: make-lru-cache (#!optional integer -> lru-cache-closure))
+  (define (make-lru-cache #!optional (max-size 64))
 
-                           (match (hash-table-ref cache key)
-                             ; List end
-                             (`(,_ . (,_ . ,terminus)) (list key))
+    ; The cache is a hash table, that represents a doubly linked list; its
+    ; keys are arbitrary (*), with values of the form:
+    ;
+    ;   (<payload : *> . (<previous key : *> . <next key : *>)
+    ;
+    ; A sentinel symbol is used to denote the termini of the list, but we
+    ; also cache both the head and tail nodes for efficiency.
+    (let* ((terminus (cons 'sentinel '())))
+      (letrec ((head  (the cache-key terminus))
+               (tail  (the cache-key terminus))
+               (cache (the hash-table (make-hash-table #:size max-size)))
 
-                             ; Otherwise
-                             (`(,_ . (,_ . ,next))
-                               (cons key (dll-keys next)))))))
+               ; Recursively build up the list of keys by traversing the
+               ; doubly linked list from a given start
+               (dll-keys (lambda (key)
+                           (if (eq? key terminus)
+                             ; Empty list if there are no entries
+                             '()
 
-             ; Does the node exist in the cache?
-             (has-node? (lambda (key)
-                          (hash-table-exists? cache key)))
+                             (match (hash-table-ref cache key)
+                               ; List end
+                               (`(,_ . (,_ . ,terminus)) (list key))
 
-             ; Get the node, which we assume exists, from the cache and
-             ; reorder the list
-             (get-node! (lambda (key)
-                          (define node (hash-table-ref cache key))
+                               ; Otherwise
+                               (`(,_ . (,_ . ,next))
+                                 (cons key (dll-keys next)))))))
 
-                          ; Reorder the list
-                          (match node
-                            ; Node is already the head
-                            (`(,_ . (,terminus . ,_)) (void))
+               ; Does the node exist in the cache?
+               (has-node? (lambda (key)
+                            (hash-table-exists? cache key)))
 
-                            ; Node is the tail
-                            (`(,_ . (,previous . ,terminus))
-                              ; Previous node becomes the tail
-                              (dll-set-next! (hash-table-ref cache previous) terminus)
-                              (set! tail previous)
+               ; Get the node, which we assume exists, from the cache and
+               ; reorder the list
+               (get-node! (lambda (key)
+                            (define node (hash-table-ref cache key))
 
-                              ; Move node to head
-                              (dll-set-previous! (hash-table-ref cache head) key)
-                              (dll-set-previous! node terminus)
-                              (dll-set-next! node head)
-                              (set! head key))
+                            ; Reorder the list
+                            (match node
+                              ; Node is already the head
+                              (`(,_ . (,terminus . ,_)) (void))
 
-                            ; Node is somewhere in the middle
-                            (`(_ . (,previous . ,next))
-                              ; Point previous node to next and vice versa
-                              (dll-set-next! (hash-table-ref cache previous) next)
-                              (dll-set-previous! (hash-table-ref cache next) previous)
+                              ; Node is the tail
+                              (`(,_ . (,previous . ,terminus))
+                                ; Previous node becomes the tail
+                                (dll-set-next! (hash-table-ref cache previous) terminus)
+                                (set! tail previous)
 
-                              ; Move node to head
-                              (dll-set-previous! (hash-table-ref cache head) key)
-                              (dll-set-previous! node terminus)
-                              (dll-set-next! node head)
-                              (set! head key)))
+                                ; Move node to head
+                                (dll-set-previous! (hash-table-ref cache head) key)
+                                (dll-set-previous! node terminus)
+                                (dll-set-next! node head)
+                                (set! head key))
 
-                          node))
+                              ; Node is somewhere in the middle
+                              (`(_ . (,previous . ,next))
+                                ; Point previous node to next and vice versa
+                                (dll-set-next! (hash-table-ref cache previous) next)
+                                (dll-set-previous! (hash-table-ref cache next) previous)
 
-             ; Add a node, which we assume doesn't exist in the cache,
-             ; to its head
-             (add-node! (lambda (key value)
-                          ; Evict the tail node when at capacity
-                          (when (= (hash-table-size cache) max-size)
-                            (remove-node! tail))
+                                ; Move node to head
+                                (dll-set-previous! (hash-table-ref cache head) key)
+                                (dll-set-previous! node terminus)
+                                (dll-set-next! node head)
+                                (set! head key)))
 
-                          (hash-table-set!
-                            cache
-                            key
-                            `(,value . (,terminus . ,head)))
+                            node))
 
-                          ; Make the old head point back to the new one
-                          (unless (eq? head terminus)
-                            (dll-set-previous! (hash-table-ref cache head) key))
+               ; Add a node, which we assume doesn't exist in the cache,
+               ; to its head
+               (add-node! (lambda (key value)
+                            ; Evict the tail node when at capacity
+                            (when (= (hash-table-size cache) max-size)
+                              (remove-node! tail))
 
-                          ; Update the head and tail pointers
-                          (set! head key)
-                          (when (eq? tail terminus) (set! tail key))))
+                            (hash-table-set!
+                              cache
+                              key
+                              `(,value . (,terminus . ,head)))
 
-             ; Remove a node from the of the cache, by key
-             (remove-node! (lambda (key)
-                             (unless (eq? key terminus)
-                               ; Reorder the list
-                               (match (hash-table-ref cache key)
-                                 ; When there's only one cached item
-                                 (`(,_ . (,terminus . ,terminus))
-                                   (hash-table-delete! cache key)
-                                   (set! head terminus)
-                                   (set! tail terminus))
+                            ; Make the old head point back to the new one
+                            (unless (eq? head terminus)
+                              (dll-set-previous! (hash-table-ref cache head) key))
 
-                                 ; Node is the head
-                                 (`(,_ . (,terminus . ,next))
-                                   (hash-table-delete! cache key)
-                                   (dll-set-previous! (hash-table-ref cache next) terminus)
-                                   (set! head next))
+                            ; Update the head and tail pointers
+                            (set! head key)
+                            (when (eq? tail terminus) (set! tail key))))
 
-                                 ; Node is the tail
-                                 (`(,_ . (,previous . ,terminus))
-                                   (hash-table-delete! cache key)
-                                   (dll-set-next! (hash-table-ref cache previous) terminus)
-                                   (set! tail previous))
+               ; Remove a node from the of the cache, by key
+               (remove-node! (lambda (key)
+                               (unless (eq? key terminus)
+                                 ; Reorder the list
+                                 (match (hash-table-ref cache key)
+                                   ; When there's only one cached item
+                                   (`(,_ . (,terminus . ,terminus))
+                                     (hash-table-delete! cache key)
+                                     (set! head terminus)
+                                     (set! tail terminus))
 
-                                 ; Node is somewhere in the middle
-                                 (`(,_ . (,previous . ,next))
-                                   (hash-table-delete! cache key)
-                                   (dll-set-next! (hash-table-ref cache previous) next)
-                                   (dll-set-previous! (hash-table-ref cache next) previous))))))
+                                   ; Node is the head
+                                   (`(,_ . (,terminus . ,next))
+                                     (hash-table-delete! cache key)
+                                     (dll-set-previous! (hash-table-ref cache next) terminus)
+                                     (set! head next))
 
-             (self (lambda msg
-                     (match msg
-                       ; Size of the cache
-                       (`(size) (hash-table-size cache))
+                                   ; Node is the tail
+                                   (`(,_ . (,previous . ,terminus))
+                                     (hash-table-delete! cache key)
+                                     (dll-set-next! (hash-table-ref cache previous) terminus)
+                                     (set! tail previous))
 
-                       ; Capacity of the cache
-                       (`(capacity) max-size)
+                                   ; Node is somewhere in the middle
+                                   (`(,_ . (,previous . ,next))
+                                     (hash-table-delete! cache key)
+                                     (dll-set-next! (hash-table-ref cache previous) next)
+                                     (dll-set-previous! (hash-table-ref cache next) previous))))))
 
-                       ; Get cache entry
-                       (`(entry ,key)
-                         (if (has-node? key)
-                           (car (get-node! key))
-                           (error "no such key" key)))
+               (self (lambda msg
+                       (match msg
+                         ; Size of the cache
+                         (`(size) (hash-table-size cache))
 
-                       ; Get cache entry, with fallback computation
-                       (`(entry ,key ,thunk)
-                         (if (has-node? key)
-                           (car (get-node! key))
-                           (let ((value (thunk)))
-                             (add-node! key value)
-                             value)))
+                         ; Capacity of the cache
+                         (`(capacity) max-size)
 
-                       ; Set a cache entry
-                       (`(set! ,key ,value)
-                         (if (has-node? key)
-                           (set-car! (get-node! key) value)
-                           (add-node! key value)))
+                         ; Get cache entry
+                         (`(entry ,key)
+                           (if (has-node? key)
+                             (car (get-node! key))
+                             (error "no such key" key)))
 
-                       ; Delete a cache entry by key
-                       (`(delete! ,key)
-                         (if (has-node? key)
-                           (remove-node! key)
-                           (error "no such key" key)))
+                         ; Get cache entry, with fallback computation
+                         (`(entry ,key ,thunk)
+                           (if (has-node? key)
+                             (car (get-node! key))
+                             (let ((value (thunk)))
+                               (add-node! key value)
+                               value)))
 
-                       ; Clear the cache
-                       (`(clear!)
-                         (hash-table-clear! cache)
-                         (set! head terminus)
-                         (set! tail terminus))
+                         ; Set a cache entry
+                         (`(set! ,key ,value)
+                           (if (has-node? key)
+                             (set-car! (get-node! key) value)
+                             (add-node! key value)))
 
-                       ; List of keys in MRU-to-LRU order
-                       (`(keys) (dll-keys head))
+                         ; Delete a cache entry by key
+                         (`(delete! ,key)
+                           (if (has-node? key)
+                             (remove-node! key)
+                             (error "no such key" key)))
 
-                       ; Otherwise fail
-                       (_ (error "Unknown or invalid message"))))))
+                         ; Clear the cache
+                         (`(clear!)
+                           (hash-table-clear! cache)
+                           (set! head terminus)
+                           (set! tail terminus))
 
-      self)))
+                         ; List of keys in MRU-to-LRU order
+                         (`(keys) (dll-keys head))
 
-;; TODO Public API
+                         ; Otherwise fail
+                         (_ (error "Unknown or invalid message"))))))
 
-(: lru-cache-size (lru-cache-closure -> integer))
-(define (lru-cache-size lru-cache) (lru-cache 'size))
+        self)))
 
-(: lru-cache-capacity (lru-cache-closure -> integer))
-(define (lru-cache-capacity lru-cache) (lru-cache 'capacity))
+  ;; TODO Public API
 
-;; Debugging
-;; TODO Tests
+  (: lru-cache-size (lru-cache-closure -> integer))
+  (define (lru-cache-size lru-cache) (lru-cache 'size))
 
-(define my-lru (make-lru-cache))
-(print (format "size     ~A~N" (lru-cache-size my-lru))
-       (format "capacity ~A~N" (lru-cache-capacity my-lru))
-       (format "~A" (my-lru 'entry 'foo)))
+  (: lru-cache-capacity (lru-cache-closure -> integer))
+  (define (lru-cache-capacity lru-cache) (lru-cache 'capacity))
+
+  )
