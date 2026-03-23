@@ -39,13 +39,13 @@
   ;; Doubly linked list helpers
 
   ; Doubly linked list node type
-  (define-type dll-node (pair * (pair * *)))
+  (define-type dll-node (pair 'v (pair 'k 'k)))
 
-  (: dll-set-previous! (dll-node * -> noreturn))
+  (: dll-set-previous! (dll-node 'k -> void))
   (define (dll-set-previous! node previous-key)
     (set-car! (cdr node) previous-key))
 
-  (: dll-set-next! (dll-node * -> noreturn))
+  (: dll-set-next! (dll-node 'k -> void))
   (define (dll-set-next! node next-key)
     (set-cdr! (cdr node) next-key))
 
