@@ -139,7 +139,7 @@
                             (set! head key)
                             (when (eq? tail terminus) (set! tail key))))
 
-               ; Remove a node from the of the cache, by key
+               ; Remove a node from the cache, by key
                (remove-node! (lambda (key)
                                (unless (eq? key terminus)
                                  ; Reorder the list
