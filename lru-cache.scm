@@ -39,7 +39,7 @@
   ;; Doubly linked list helpers
 
   ; Doubly linked list node type
-  (define-type dll-node (pair * pair))
+  (define-type dll-node (pair * (pair * *)))
 
   (: dll-set-previous! (dll-node * -> noreturn))
   (define (dll-set-previous! node previous-key)
@@ -51,10 +51,8 @@
 
   ;; LRU cache implementation
 
-  ; Cache types
-  ; TODO cache key type should be more liberal
+  ; Cache type (somewhat impenetrable!)
   (define-type lru-cache-closure (symbol #!rest * -> *))
-  (define-type cache-key (or symbol list))
 
   (: make-lru-cache (#!optional integer -> lru-cache-closure))
   (define (make-lru-cache #!optional (max-size 64))
@@ -67,8 +65,8 @@
     ; A sentinel symbol is used to denote the termini of the list, but we
     ; also cache both the head and tail nodes for efficiency.
     (let* ((terminus (cons 'sentinel '())))
-      (letrec ((head  (the cache-key terminus))
-               (tail  (the cache-key terminus))
+      (letrec ((head  terminus)
+               (tail  terminus)
                (cache (the hash-table (make-hash-table #:size max-size)))
 
                ; Recursively build up the list of keys by traversing the
@@ -255,7 +253,7 @@
   (: lru-cache-keys (lru-cache-closure -> (list-of 'k)))
   (define (lru-cache-keys lru-cache) (lru-cache 'keys))
 
-  (: memoise/lru (procedure #!optional integer -> procedure))
+  (: memoise/lru (forall (a b) ((a -> b) #!optional integer -> (a -> b))))
   (define (memoise/lru proc #!optional (max-size 64))
     (let ((cache (make-lru-cache max-size)))
       (lambda args
