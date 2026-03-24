@@ -1,5 +1,5 @@
 ;; Least recently used cache library for Chicken Scheme
-;; Copyright (C) 2026 Christopher Harrison
+;; Copyright (C) 2026 Tweag SARL
 ;;
 ;; This library is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as
