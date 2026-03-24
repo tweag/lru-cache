@@ -64,7 +64,9 @@
     ;
     ; A sentinel symbol is used to denote the termini of the list, but we
     ; also cache both the head and tail nodes for efficiency.
-    (let* ((terminus (cons 'sentinel '())))
+    (let* ((terminus (cons 'sentinel '()))
+           (terminus? (lambda (x) (eq? x terminus))))
+
       (letrec ((head  terminus)
                (tail  terminus)
                (cache (the hash-table (make-hash-table #:size max-size)))
@@ -78,10 +80,10 @@
 
                              (match (hash-table-ref cache key)
                                ; List end
-                               (`(,_ . (,_ . ,terminus)) (list key))
+                               ((_ . (_ . (? terminus?))) (list key))
 
                                ; Otherwise
-                               (`(,_ . (,_ . ,next))
+                               ((_ . (_ . next))
                                  (cons key (dll-keys next)))))))
 
                ; Does the node exist in the cache?
@@ -96,10 +98,10 @@
                             ; Reorder the list
                             (match node
                               ; Node is already the head
-                              (`(,_ . (,terminus . ,_)) (void))
+                              ((_ . ((? terminus?) . _)) (void))
 
                               ; Node is the tail
-                              (`(,_ . (,previous . ,terminus))
+                              ((_ . (previous . (? terminus?)))
                                 ; Previous node becomes the tail
                                 (dll-set-next! (hash-table-ref cache previous) terminus)
                                 (set! tail previous)
@@ -111,7 +113,7 @@
                                 (set! head key))
 
                               ; Node is somewhere in the middle
-                              (`(_ . (,previous . ,next))
+                              ((_ . (previous . next))
                                 ; Point previous node to next and vice versa
                                 (dll-set-next! (hash-table-ref cache previous) next)
                                 (dll-set-previous! (hash-table-ref cache next) previous)
@@ -150,25 +152,25 @@
                                  ; Reorder the list
                                  (match (hash-table-ref cache key)
                                    ; When there's only one cached item
-                                   (`(,_ . (,terminus . ,terminus))
+                                   ((_ . ((? terminus?) . (? terminus?)))
                                      (hash-table-delete! cache key)
                                      (set! head terminus)
                                      (set! tail terminus))
 
                                    ; Node is the head
-                                   (`(,_ . (,terminus . ,next))
+                                   ((_ . ((? terminus?) . next))
                                      (hash-table-delete! cache key)
                                      (dll-set-previous! (hash-table-ref cache next) terminus)
                                      (set! head next))
 
                                    ; Node is the tail
-                                   (`(,_ . (,previous . ,terminus))
+                                   ((_ . (previous . (? terminus?)))
                                      (hash-table-delete! cache key)
                                      (dll-set-next! (hash-table-ref cache previous) terminus)
                                      (set! tail previous))
 
                                    ; Node is somewhere in the middle
-                                   (`(,_ . (,previous . ,next))
+                                   ((_ . (previous . next))
                                      (hash-table-delete! cache key)
                                      (dll-set-next! (hash-table-ref cache previous) next)
                                      (dll-set-previous! (hash-table-ref cache next) previous))))))
