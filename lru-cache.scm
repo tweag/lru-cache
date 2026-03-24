@@ -255,6 +255,7 @@
   (: lru-cache-keys (lru-cache-closure -> (list-of 'k)))
   (define (lru-cache-keys lru-cache) (lru-cache 'keys))
 
+  ; TODO Turn this into a macro to support recursive functions
   (: memoise/lru (procedure #!optional integer -> procedure))
   (define (memoise/lru proc #!optional (max-size 64))
     (let ((cache (make-lru-cache max-size)))

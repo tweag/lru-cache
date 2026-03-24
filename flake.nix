@@ -23,6 +23,7 @@
         ];
 
         testEggs = with chickenEggs; [
+          srfi-1
           test
         ];
 
@@ -65,14 +66,17 @@
       {
         packages.default = lru-cache;
 
-        checks.default = pkgs.runCommand "lru-cache-tests" {
-          nativeBuildInputs = [ pkgs.chicken ] ++ allEggs;
-        } ''
-          export CHICKEN_REPOSITORY_PATH="${mkRepoPath allEggs}:${lru-cache}/lib/chicken/11"
-          cd ${./tests}
-          csi -s run.scm
-          touch $out
-        '';
+        checks.default =
+          pkgs.runCommand "lru-cache-tests"
+            {
+              nativeBuildInputs = [ pkgs.chicken ] ++ allEggs;
+            }
+            ''
+              export CHICKEN_REPOSITORY_PATH="${mkRepoPath allEggs}:${lru-cache}/lib/chicken/11"
+              cd ${./tests}
+              csi -s run.scm
+              touch $out
+            '';
 
         devShells.default = pkgs.mkShell {
           buildInputs = [ pkgs.chicken ] ++ allEggs;
