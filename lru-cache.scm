@@ -26,6 +26,7 @@
    lru-cache-delete!
    lru-cache-clear!
    lru-cache-has-key?
+   lru-cache-for-each
    lru-cache-keys
    memoise/lru)
 
@@ -70,21 +71,6 @@
       (letrec ((head  terminus)
                (tail  terminus)
                (cache (the hash-table (make-hash-table #:size max-size)))
-
-               ; Recursively build up the list of keys by traversing the
-               ; doubly linked list from a given start
-               (dll-keys (lambda (key)
-                           (if (eq? key terminus)
-                             ; Empty list if there are no entries
-                             '()
-
-                             (match (hash-table-ref cache key)
-                               ; List end
-                               ((_ . (_ . (? terminus?))) (list key))
-
-                               ; Otherwise
-                               ((_ . (_ . next))
-                                 (cons key (dll-keys next)))))))
 
                ; Does the node exist in the cache?
                (has-node? (lambda (key)
@@ -218,8 +204,16 @@
                    ; Does the cache have a given key
                    (`(has-key? ,key) (has-node? key))
 
-                   ; List of keys in MRU-to-LRU order
-                   (`(keys) (dll-keys head))
+                   ; Apply a function to each (key, value) pair, in
+                   ; MRU-to-LRU order, without updating the key order
+                   (`(for-each ,proc)
+                     (let loop ((key head))
+                       (unless (terminus? key)
+                         (let ((node (hash-table-ref cache key)))
+                           (proc key (car node))
+                           (match node
+                             ((_ . (_ . (? terminus?))) (void))
+                             ((_ . (_ . next))          (loop next)))))))
 
                    ; Otherwise fail
                    (_ (error "Unknown or invalid message")))))))
@@ -250,8 +244,16 @@
   (: lru-cache-has-key? (lru-cache-closure 'k -> boolean))
   (define (lru-cache-has-key? lru-cache key) (lru-cache 'has-key? key))
 
+  (: lru-cache-for-each (lru-cache-closure ('k 'v -> *) -> void))
+  (define (lru-cache-for-each lru-cache proc) (lru-cache 'for-each proc))
+
   (: lru-cache-keys (lru-cache-closure -> (list-of 'k)))
-  (define (lru-cache-keys lru-cache) (lru-cache 'keys))
+  (define (lru-cache-keys lru-cache)
+    (let ((result '()))
+      (lru-cache-for-each lru-cache
+        (lambda (key _) (set! result (cons key result))))
+
+      (reverse result)))
 
   ; TODO Turn this into a macro to support recursive functions
   (: memoise/lru (procedure #!optional integer -> procedure))
