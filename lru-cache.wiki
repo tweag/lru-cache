@@ -1,0 +1,155 @@
+== lru-cache
+
+[[toc:]]
+
+=== Description
+
+An LRU (least recently used) cache for Chicken Scheme 5.
+
+Keys and values may be of any type. The cache uses a hash table for O(1)
+lookup and a doubly-linked list to maintain access ordering. When the
+cache reaches capacity, the least recently used entry is evicted.
+
+This implementation shares no lineage with the
+[[/eggref/4/lru-cache|lru-cache egg]], for Chicken Scheme 4, by Jim
+Ursetto.
+
+=== Author
+
+Christopher Harrison ([[https://tweag.io|Tweag]])
+
+=== Repository
+
+[[https://github.com/tweag/lru-cache]]
+
+=== Requirements
+
+* [[/egg/srfi-69|srfi-69]]
+* [[/egg/matchable|matchable]]
+
+=== API
+
+==== Cache creation
+
+<procedure>(make-lru-cache [capacity])</procedure>
+
+Create a new LRU cache. {{capacity}} is the maximum number of entries
+the cache will hold before evicting the least recently used entry;
+defaulting to 64.
+
+==== Lookup and mutation
+
+<procedure>(lru-cache-ref cache key)</procedure>
+
+Returns the value associated with {{key}} in {{cache}}, promoting it to
+the most recently used position. Signals an error if {{key}} is not
+present.
+
+<procedure>(lru-cache-ref cache key thunk)</procedure>
+
+Returns the value associated with {{key}} in {{cache}} if present,
+promoting it to the most recently used position. If {{key}} is not
+present, calls {{thunk}} (a procedure of zero arguments) to compute the
+value, caches the result and returns it.
+
+<procedure>(lru-cache-set! cache key value)</procedure>
+
+Associates {{key}} with {{value}} in {{cache}}. If {{key}} already
+exists, updates its value and promotes it to the most recently used
+position. If {{key}} is new and the cache is at capacity, the least
+recently used entry is evicted.
+
+<procedure>(lru-cache-delete! cache key)</procedure>
+
+Removes the entry for {{key}} from {{cache}}. Signals an error if
+{{key}} is not present.
+
+<procedure>(lru-cache-clear! cache)</procedure>
+
+Removes all entries from {{cache}}.
+
+==== Inspection
+
+<procedure>(lru-cache-size cache)</procedure>
+
+Returns the number of entries currently in {{cache}}.
+
+<procedure>(lru-cache-capacity cache)</procedure>
+
+Returns the maximum number of entries {{cache}} can hold.
+
+<procedure>(lru-cache-has-key? cache key)</procedure>
+
+Returns {{#t}} if {{key}} is present in {{cache}}, {{#f}} otherwise.
+Does not affect the access ordering.
+
+<procedure>(lru-cache-keys cache)</procedure>
+
+Returns a list of all keys in {{cache}}, ordered from most recently used
+to least recently used.
+
+==== Memoisation
+
+<procedure>(memoise/lru proc [capacity])</procedure>
+
+Returns a new procedure that caches the results of calling {{proc}}.
+Arguments are used as the cache key (compared as a list). {{capacity}}
+defaults to 64.
+
+'''Note:''' For recursive procedures, the memoised version must replace
+the original binding for recursive calls to benefit from caching:
+
+<enscript highlight="scheme">
+(define (fib n)
+  (cond
+    ((= n 0) 1)
+    ((= n 1) 1)
+    (else (+ (fib (- n 1)) (fib (- n 2))))))
+
+(set! fib (memoise/lru fib))
+</enscript>
+
+=== Examples
+
+<enscript highlight="scheme">
+(import lru-cache)
+
+;; Create a cache with capacity 3
+(define cache (make-lru-cache 3))
+
+;; Add some entries
+(lru-cache-set! cache 'a 1)
+(lru-cache-set! cache 'b 2)
+(lru-cache-set! cache 'c 3)
+
+(lru-cache-keys cache)    ; => (c b a)
+
+;; Accessing an entry promotes it
+(lru-cache-ref cache 'a)  ; => 1
+(lru-cache-keys cache)    ; => (a c b)
+
+;; Adding a fourth entry evicts the LRU
+(lru-cache-set! cache 'd 4)
+(lru-cache-keys cache)    ; => (d a c)
+(lru-cache-has-key? cache 'b) ; => #f
+
+;; Using a thunk for cache-or-compute
+(lru-cache-ref cache 'e
+  (lambda () (+ 40 2)))   ; => 42
+
+;; Memoisation
+(define (slow-square x)
+  (begin (print "computing...") (* x x)))
+(define fast-square (memoise/lru slow-square))
+
+(fast-square 5)  ; prints "computing...", returns 25
+(fast-square 5)  ; returns 25, no print
+</enscript>
+
+=== License
+
+LGPL-3.0-or-later
+
+=== Version history
+
+; 0.1.0 : Initial release

@@ -27,6 +27,17 @@
           test
         ];
 
+        docEggs = with chickenEggs; [
+          svnwiki-sxml
+          sxml-transforms
+          html-parser
+          matchable
+          srfi-1
+          srfi-13
+          srfi-14
+          regex
+        ];
+
         allEggs = eggs ++ testEggs;
 
         # Build the repository path, including the base Chicken installation
@@ -37,6 +48,24 @@
             eggRepos = pkgs.lib.concatMapStringsSep ":" (egg: "${egg}/lib/chicken/11") eggList;
           in
           "${baseChickenRepo}:${eggRepos}";
+
+        # Convert svnwiki documentation to GitHub-flavoured Markdown
+        generate-readme = pkgs.writeShellApplication {
+          name = "generate-readme";
+          runtimeInputs = [
+            pkgs.chicken
+            pkgs.pandoc
+          ];
+          text = ''
+            export CHICKEN_REPOSITORY_PATH="${mkRepoPath docEggs}"
+            input="''${1:?Usage: generate-readme <input.wiki>}"
+            {
+              echo "<!-- DO NOT EDIT: generated from $input by generate-readme -->"
+              echo
+              csi -s ${./scripts/wiki2html.scm} "$input" | pandoc -f html -t gfm
+            }
+          '';
+        };
 
         # Compile the extension from source
         lru-cache = pkgs.stdenv.mkDerivation {
@@ -65,6 +94,12 @@
       in
       {
         packages.default = lru-cache;
+        packages.generate-readme = generate-readme;
+
+        apps.generate-readme = {
+          type = "app";
+          program = "${generate-readme}/bin/generate-readme";
+        };
 
         checks.default =
           pkgs.runCommand "lru-cache-tests"

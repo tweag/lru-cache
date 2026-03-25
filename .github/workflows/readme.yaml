@@ -1,0 +1,71 @@
+name: Generate README
+
+on:
+  pull_request:
+    paths:
+      - 'lru-cache.wiki'
+      - 'scripts/wiki2html.scm'
+
+permissions:
+  contents: read
+
+jobs:
+
+  generate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixpkgs-unstable
+
+      - name: Generate README
+        run: nix run .#generate-readme -- lru-cache.wiki > README.md
+
+      - name: Upload README artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: readme
+          path: README.md
+
+  commit:
+    needs: generate
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Download README artefact
+        uses: actions/download-artifact@v4
+        with:
+          name: readme
+
+      - name: Commit generated README changes
+        if: github.event.pull_request.head.repo.fork == false
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "Generate README.md from lru-cache.wiki"
+          git push
+
+      - name: Check for drift (forks only)
+        if: github.event.pull_request.head.repo.fork == true
+        run: |
+          git add README.md
+          if ! git diff --staged --quiet; then
+            echo "::error::README.md is out of date. Please regenerate it locally by running: nix run .#generate-readme -- lru-cache.wiki > README.md"
+            exit 1
+          fi
