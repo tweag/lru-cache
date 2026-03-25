@@ -116,6 +116,30 @@
     (test "ref returns the cached value produced by the thunk"
           123 fetch))
 
+  (test-group "for-each"
+    (define cache (make-lru-cache))
+
+    (lru-cache-set! cache 'foo 123)
+    (lru-cache-set! cache 'bar 456)
+    (lru-cache-set! cache 'quux 789)
+
+    (define result '())
+    (lru-cache-for-each cache
+      (lambda (key value) (set! result (cons `(,key . ,value) result))))
+
+    (let ((expected '((foo . 123) (bar . 456) (quux . 789))))
+      (test "visits all entries" expected result))
+
+    (test "maintains insertion order" '(quux bar foo) (lru-cache-keys cache)))
+
+  (test-group "alist conversion"
+    (define cache (make-lru-cache))
+
+    (lru-cache-set! cache 'foo 1)
+    (lru-cache-set! cache 'bar 2)
+
+    (test "alist" '((bar . 2) (foo . 1)) (lru-cache->alist cache)))
+
   (test-group "memoise"
     (define counter 0)
     (define (fib n)

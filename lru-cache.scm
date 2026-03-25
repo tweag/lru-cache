@@ -26,7 +26,11 @@
    lru-cache-delete!
    lru-cache-clear!
    lru-cache-has-key?
+   lru-cache-for-each
+   lru-cache-fold
+   lru-cache->alist
    lru-cache-keys
+   lru-cache-values
    memoise/lru)
 
   (import scheme
@@ -70,21 +74,6 @@
       (letrec ((head  terminus)
                (tail  terminus)
                (cache (the hash-table (make-hash-table #:size max-size)))
-
-               ; Recursively build up the list of keys by traversing the
-               ; doubly linked list from a given start
-               (dll-keys (lambda (key)
-                           (if (eq? key terminus)
-                             ; Empty list if there are no entries
-                             '()
-
-                             (match (hash-table-ref cache key)
-                               ; List end
-                               ((_ . (_ . (? terminus?))) (list key))
-
-                               ; Otherwise
-                               ((_ . (_ . next))
-                                 (cons key (dll-keys next)))))))
 
                ; Does the node exist in the cache?
                (has-node? (lambda (key)
@@ -173,58 +162,64 @@
                                    ((_ . (previous . next))
                                      (hash-table-delete! cache key)
                                      (dll-set-next! (hash-table-ref cache previous) next)
-                                     (dll-set-previous! (hash-table-ref cache next) previous))))))
+                                     (dll-set-previous! (hash-table-ref cache next) previous)))))))
 
-               (self (lambda msg
-                       (match msg
-                         ; Size of the cache
-                         (`(size) (hash-table-size cache))
+               (lambda msg
+                 (match msg
+                   ; Size of the cache
+                   (`(size) (hash-table-size cache))
 
-                         ; Capacity of the cache
-                         (`(capacity) max-size)
+                   ; Capacity of the cache
+                   (`(capacity) max-size)
 
-                         ; Get cache entry
-                         (`(entry ,key)
-                           (if (has-node? key)
-                             (car (get-node! key))
-                             (error "no such key" key)))
+                   ; Get cache entry
+                   (`(entry ,key)
+                     (if (has-node? key)
+                       (car (get-node! key))
+                       (error "no such key" key)))
 
-                         ; Get cache entry, with fallback computation
-                         (`(entry ,key ,thunk)
-                           (if (has-node? key)
-                             (car (get-node! key))
-                             (let ((value (thunk)))
-                               (add-node! key value)
-                               value)))
+                   ; Get cache entry, with fallback computation
+                   (`(entry ,key ,thunk)
+                     (if (has-node? key)
+                       (car (get-node! key))
+                       (let ((value (thunk)))
+                         (add-node! key value)
+                         value)))
 
-                         ; Set a cache entry
-                         (`(set! ,key ,value)
-                           (if (has-node? key)
-                             (set-car! (get-node! key) value)
-                             (add-node! key value)))
+                   ; Set a cache entry
+                   (`(set! ,key ,value)
+                     (if (has-node? key)
+                       (set-car! (get-node! key) value)
+                       (add-node! key value)))
 
-                         ; Delete a cache entry by key
-                         (`(delete! ,key)
-                           (if (has-node? key)
-                             (remove-node! key)
-                             (error "no such key" key)))
+                   ; Delete a cache entry by key
+                   (`(delete! ,key)
+                     (if (has-node? key)
+                       (remove-node! key)
+                       (error "no such key" key)))
 
-                         ; Clear the cache
-                         (`(clear!)
-                           (hash-table-clear! cache)
-                           (set! head terminus)
-                           (set! tail terminus))
+                   ; Clear the cache
+                   (`(clear!)
+                     (hash-table-clear! cache)
+                     (set! head terminus)
+                     (set! tail terminus))
 
-                         ; Does the cache have a given key
-                         (`(has-key? ,key) (has-node? key))
+                   ; Does the cache have a given key
+                   (`(has-key? ,key) (has-node? key))
 
-                         ; List of keys in MRU-to-LRU order
-                         (`(keys) (dll-keys head))
+                   ; Apply a function to each (key, value) pair, in
+                   ; MRU-to-LRU order, without updating the key order
+                   (`(for-each ,proc)
+                     (let loop ((key head))
+                       (unless (terminus? key)
+                         (let ((node (hash-table-ref cache key)))
+                           (proc key (car node))
+                           (match node
+                             ((_ . (_ . (? terminus?))) (void))
+                             ((_ . (_ . next))          (loop next)))))))
 
-                         ; Otherwise fail
-                         (_ (error "Unknown or invalid message"))))))
-
-        self)))
+                   ; Otherwise fail
+                   (_ (error "Unknown or invalid message")))))))
 
   ;; Public API
 
@@ -252,8 +247,30 @@
   (: lru-cache-has-key? (lru-cache-closure 'k -> boolean))
   (define (lru-cache-has-key? lru-cache key) (lru-cache 'has-key? key))
 
+  (: lru-cache-for-each (lru-cache-closure ('k 'v -> *) -> void))
+  (define (lru-cache-for-each lru-cache proc) (lru-cache 'for-each proc))
+
+  (: lru-cache-fold (lru-cache-closure ('k 'v 'a -> 'a) 'a -> 'a))
+  (define (lru-cache-fold lru-cache proc init)
+    (let ((acc init))
+      (lru-cache-for-each lru-cache
+        (lambda (key value) (set! acc (proc key value acc))))
+
+      acc))
+
+  (: lru-cache->alist (lru-cache-closure -> (list-of (pair 'k 'v))))
+  (define (lru-cache->alist lru-cache)
+    (reverse (lru-cache-fold lru-cache
+               (lambda (key value acc) (cons `(,key . ,value) acc))
+               '())))
+
   (: lru-cache-keys (lru-cache-closure -> (list-of 'k)))
-  (define (lru-cache-keys lru-cache) (lru-cache 'keys))
+  (define (lru-cache-keys lru-cache)
+    (map car (lru-cache->alist lru-cache)))
+
+  (: lru-cache-values (lru-cache-closure -> (list-of 'v)))
+  (define (lru-cache-values lru-cache)
+    (map cdr (lru-cache->alist lru-cache)))
 
   ; TODO Turn this into a macro to support recursive functions
   (: memoise/lru (procedure #!optional integer -> procedure))

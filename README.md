@@ -82,10 +82,40 @@ Returns the maximum number of entries `cache` can hold.
 Returns `#t` if `key` is present in `cache`, `#f` otherwise. Does not
 affect the access ordering.
 
+### Iteration
+
+#### `(lru-cache-for-each cache proc)`
+
+Apply `proc` (a procedure of two arguments: the entry key and value,
+respectively) to each entry in `cache`, ordered from most recently used
+to least recently used. Does not affect the access ordering.
+
+**Note:** `proc` must not mutate `cache`.
+
+#### `(lru-cache-fold cache proc init)`
+
+Calls `proc` (a procedure of three arguments: the entry key, value and
+accumulator, respectively) with each entry in `cache`, ordered from most
+recently to least recently used; the initial folded value is `init`,
+returns the final folded value. Does not affect the access ordering.
+
+**Note:** `proc` must not mutate `cache`.
+
+#### `(lru-cache->alist cache)`
+
+Returns an association list of all key-value pairs in `cache`, ordered
+from most recently used to least recently used. Does not affect the
+access ordering.
+
 #### `(lru-cache-keys cache)`
 
 Returns a list of all keys in `cache`, ordered from most recently used
-to least recently used.
+to least recently used. Does not affect the access ordering.
+
+#### `(lru-cache-values cache)`
+
+Returns a list of all values in `cache`, ordered from most recently used
+to least recently used. Does not affect the access ordering.
 
 ### Memoisation
 
