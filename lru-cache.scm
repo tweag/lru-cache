@@ -268,7 +268,7 @@
   (define (lru-cache-keys lru-cache)
     (map car (lru-cache->alist lru-cache)))
 
-  (: lru-cache-values (lru-cache-closure -> (list-of 'k)))
+  (: lru-cache-values (lru-cache-closure -> (list-of 'v)))
   (define (lru-cache-values lru-cache)
     (map cdr (lru-cache->alist lru-cache)))
 
