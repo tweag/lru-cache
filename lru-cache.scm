@@ -31,7 +31,8 @@
    lru-cache->alist
    lru-cache-keys
    lru-cache-values
-   define-memoised/lru)
+   define-memoised/lru
+   memoise/lru)
 
   (import scheme
           (chicken base)
@@ -279,15 +280,21 @@
        (define name
          (let ((cache (make-lru-cache)))
            (lambda (arg ...)
-             (cache 'entry
-                    (list arg ...)
-                    (lambda () body ...))))))
+             (lru-cache-ref cache
+                            (list arg ...)
+                            (lambda () body ...))))))
 
       ; Explicit capacity
       ((_ capacity (name arg ...) body ...)
        (define name
          (let ((cache (make-lru-cache capacity)))
            (lambda (arg ...)
-             (cache 'entry
-                    (list arg ...)
-                    (lambda () body ...)))))))))
+             (lru-cache-ref cache
+                            (list arg ...)
+                            (lambda () body ...))))))))
+
+  (: memoise/lru (procedure #!optional integer -> procedure))
+  (define (memoise/lru proc #!optional (max-size 64))
+    (let ((cache (make-lru-cache max-size)))
+      (lambda args
+        (cache 'entry args (lambda () (apply proc args)))))))

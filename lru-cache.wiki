@@ -127,9 +127,25 @@ Defines a top-level procedure {{name}}, with its argument list and
 body definition per usual, but return values are cached based on the
 arguments (compared as a list). {{capacity}} defaults to 64.
 
+<procedure>(memoise/lru proc [capacity])</procedure>
+
 Returns a new procedure that caches the results of calling {{proc}}.
 Arguments are used as the cache key (compared as a list). {{capacity}}
 defaults to 64.
+
+'''Note:''' For recursive procedures, the memoised version must replace
+the original binding for recursive calls to benefit from caching. It is
+better to use {{define-memoised/lru}} in such cases, wherever possible.
+
+<enscript highlight="scheme">
+(define (fib n)
+  (cond
+    ((= n 0) 1)
+    ((= n 1) 1)
+    (else (+ (fib (- n 1)) (fib (- n 2))))))
+
+(set! fib (memoise/lru fib))
+</enscript>
 
 === Examples
 

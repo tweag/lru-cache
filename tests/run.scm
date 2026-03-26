@@ -168,6 +168,7 @@
           '(1 1 2 3 5) (map fib (iota 5)))
 
     ; The smaller capacity means more cache misses
+    ; NOTE Evaluation order is not guaranteed, so this _may_ be flaky.
     (test "memoised function reuses cached results instead of recomputing"
           8 counter))
 
