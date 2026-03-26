@@ -1,4 +1,4 @@
-name: Generate README
+name: Synchronise README
 
 on:
   pull_request:
