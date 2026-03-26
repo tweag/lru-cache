@@ -297,4 +297,4 @@
   (define (memoise/lru proc #!optional (max-size 64))
     (let ((cache (make-lru-cache max-size)))
       (lambda args
-        (cache 'entry args (lambda () (apply proc args)))))))
+        (lru-cache-entry cache args (lambda () (apply proc args)))))))

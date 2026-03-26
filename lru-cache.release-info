@@ -1,0 +1,3 @@
+(repo git "https://github.com/tweag/lru-cache.git")
+(uri targz "https://codeload.github.com/tweag/lru-cache/tar.gz/{egg-release}")
+(release "v0.1.0")
