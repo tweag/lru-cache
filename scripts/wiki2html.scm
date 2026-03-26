@@ -93,6 +93,12 @@
         (display (escape-html (cadr node)))
         (display "</code>"))
 
+       ;; Syntax type in a signature
+       ((syntax)
+        (display "<code>")
+        (display (escape-html (cadr node)))
+        (display "</code>"))
+
        ;; Code blocks with syntax highlighting
        ((highlight)
         (let ((lang (cadr node))
